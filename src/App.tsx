@@ -5,13 +5,14 @@
 
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { X, Info, Shirt, Image as ImageIcon, Plus, Upload, Trash2, LogIn, LogOut } from "lucide-react";
+import { X, Info, Shirt, Image as ImageIcon, Plus, Upload, Trash2, LogIn, LogOut, Edit2 } from "lucide-react";
 import { 
   collection, 
   onSnapshot, 
   query, 
   orderBy, 
   addDoc, 
+  updateDoc,
   serverTimestamp,
   deleteDoc,
   doc 
@@ -28,6 +29,7 @@ export default function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [showAdmin, setShowAdmin] = useState(false);
+  const [editingCharacter, setEditingCharacter] = useState<Character | null>(null);
   const [loading, setLoading] = useState(true);
 
   const selectedCharacter = characters.find((c) => c.id === selectedId);
@@ -150,6 +152,7 @@ export default function App() {
             character={selectedCharacter}
             onClose={() => setSelectedId(null)}
             isAdmin={isAdmin}
+            onEdit={() => setEditingCharacter(selectedCharacter)}
           />
         )}
       </AnimatePresence>
@@ -158,6 +161,9 @@ export default function App() {
       <AnimatePresence>
         {showAdmin && (
           <AdminPanel onClose={() => setShowAdmin(false)} />
+        )}
+        {editingCharacter && (
+          <AdminPanel editCharacter={editingCharacter} onClose={() => setEditingCharacter(null)} />
         )}
       </AnimatePresence>
 
@@ -170,7 +176,7 @@ export default function App() {
   );
 }
 
-function CharacterDetail({ character, onClose, isAdmin }: { character: Character; onClose: () => void; isAdmin: boolean | null }) {
+function CharacterDetail({ character, onClose, isAdmin, onEdit }: { character: Character; onClose: () => void; isAdmin: boolean | null; onEdit: () => void }) {
   const [activeTab, setActiveTab] = useState<"settings" | "wardrobe" | "portfolio">("settings");
   const [activeWardrobeIdx, setActiveWardrobeIdx] = useState(0);
 
@@ -193,9 +199,14 @@ function CharacterDetail({ character, onClose, isAdmin }: { character: Character
     >
       <div className="fixed top-8 right-8 z-[60] flex gap-4">
         {isAdmin && (
-          <button onClick={handleDelete} className="p-4 hover:bg-red-500/20 text-red-500 rounded-full transition-colors">
-            <Trash2 className="w-6 h-6" />
-          </button>
+          <>
+            <button onClick={onEdit} className="p-4 hover:bg-blue-500/20 text-blue-400 rounded-full transition-colors">
+              <Edit2 className="w-6 h-6" />
+            </button>
+            <button onClick={handleDelete} className="p-4 hover:bg-red-500/20 text-red-500 rounded-full transition-colors">
+              <Trash2 className="w-6 h-6" />
+            </button>
+          </>
         )}
         <button
           onClick={onClose}
@@ -376,14 +387,14 @@ function CharacterDetail({ character, onClose, isAdmin }: { character: Character
   );
 }
 
-function AdminPanel({ onClose }: { onClose: () => void }) {
-  const [name, setName] = useState("");
-  const [japaneseName, setJapaneseName] = useState("");
-  const [description, setDescription] = useState("");
-  const [age, setAge] = useState("");
-  const [height, setHeight] = useState("");
-  const [personality, setPersonality] = useState("");
-  const [likes, setLikes] = useState("");
+function AdminPanel({ onClose, editCharacter }: { onClose: () => void; editCharacter?: Character }) {
+  const [name, setName] = useState(editCharacter?.name || "");
+  const [japaneseName, setJapaneseName] = useState(editCharacter?.japaneseName || "");
+  const [description, setDescription] = useState(editCharacter?.description || "");
+  const [age, setAge] = useState(editCharacter?.settings?.age || "");
+  const [height, setHeight] = useState(editCharacter?.settings?.height || "");
+  const [personality, setPersonality] = useState(editCharacter?.settings?.personality || "");
+  const [likes, setLikes] = useState(editCharacter?.settings?.likes?.join(", ") || "");
   
   const [posterFile, setPosterFile] = useState<File | null>(null);
   const [wardrobeFiles, setWardrobeFiles] = useState<{ name: string; file: File }[]>([]);
@@ -400,17 +411,20 @@ function AdminPanel({ onClose }: { onClose: () => void }) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!posterFile) return alert("請上傳角色大海報");
+    if (!editCharacter && !posterFile) return alert("請上傳角色大海報");
     
     setUploading(true);
     try {
       // 1. Upload Poster
-      setProgress("正在上傳大海報...");
-      const posterUrl = await uploadFile(posterFile, `posters/${Date.now()}_${posterFile.name}`);
+      let posterUrl = editCharacter?.posterUrl || "";
+      if (posterFile) {
+        setProgress("正在上傳大海報...");
+        posterUrl = await uploadFile(posterFile, `posters/${Date.now()}_${posterFile.name}`);
+      }
 
       // 2. Upload Wardrobe
       setProgress("正在上傳衣櫃圖片...");
-      const wardrobe: WardrobeItem[] = [];
+      const wardrobe: WardrobeItem[] = editCharacter?.wardrobe ? [...editCharacter.wardrobe] : [];
       for (const item of wardrobeFiles) {
         const url = await uploadFile(item.file, `wardrobe/${Date.now()}_${item.file.name}`);
         wardrobe.push({ id: Math.random().toString(36).substr(2, 9), name: item.name, imageUrl: url });
@@ -418,7 +432,7 @@ function AdminPanel({ onClose }: { onClose: () => void }) {
 
       // 3. Upload Portfolio
       setProgress("正在上傳作品集...");
-      const portfolio: PortfolioItem[] = [];
+      const portfolio: PortfolioItem[] = editCharacter?.portfolio ? [...editCharacter.portfolio] : [];
       for (const file of portfolioFiles) {
         const url = await uploadFile(file, `portfolio/${Date.now()}_${file.name}`);
         portfolio.push({ id: Math.random().toString(36).substr(2, 9), imageUrl: url, title: file.name.split(".")[0] });
@@ -426,7 +440,8 @@ function AdminPanel({ onClose }: { onClose: () => void }) {
 
       // 4. Save to Firestore
       setProgress("正在儲存資料...");
-      await addDoc(collection(db, "characters"), {
+      
+      const characterData = {
         name,
         japaneseName,
         posterUrl,
@@ -439,13 +454,21 @@ function AdminPanel({ onClose }: { onClose: () => void }) {
         },
         wardrobe,
         portfolio,
-        createdAt: serverTimestamp(),
-      });
+      };
+
+      if (editCharacter) {
+        await updateDoc(doc(db, "characters", editCharacter.id), characterData);
+      } else {
+        await addDoc(collection(db, "characters"), {
+          ...characterData,
+          createdAt: serverTimestamp(),
+        });
+      }
 
       onClose();
     } catch (error) {
       console.error("Upload failed:", error);
-      alert("上傳失敗：沒有權限。請確認您已在 Firebase Storage 設定了正確的安全性規則 (allow write: if request.auth != null;)。");
+      alert("上傳失敗：沒有權限。請確認您已在 Firebase Firestore 設定了正確的安全性規則 (allow write: if request.auth != null;)。");
     } finally {
       setUploading(false);
     }
@@ -460,7 +483,7 @@ function AdminPanel({ onClose }: { onClose: () => void }) {
     >
       <div className="max-w-2xl mx-auto bg-zinc-900 p-8 rounded-lg border border-white/10">
         <div className="flex justify-between items-center mb-8">
-          <h2 className="serif text-3xl">新增寶寶</h2>
+          <h2 className="serif text-3xl">{editCharacter ? "編輯寶寶" : "新增寶寶"}</h2>
           <button onClick={onClose}><X /></button>
         </div>
 
@@ -481,12 +504,16 @@ function AdminPanel({ onClose }: { onClose: () => void }) {
           <input placeholder="喜好 (以逗號分隔)" value={likes} onChange={e => setLikes(e.target.value)} className="w-full bg-white/5 border border-white/10 p-3 rounded-sm text-sm" />
 
           <div className="space-y-4">
-            <label className="block text-xs uppercase tracking-widest text-white/40">角色大海報 (2:3)</label>
-            <input type="file" required accept="image/*" onChange={e => setPosterFile(e.target.files?.[0] || null)} className="text-xs" />
+            <label className="block text-xs uppercase tracking-widest text-white/40">
+              角色大海報 (2:3) {editCharacter && "- 若不上傳則保留原圖"}
+            </label>
+            <input type="file" required={!editCharacter} accept="image/*" onChange={e => setPosterFile(e.target.files?.[0] || null)} className="text-xs" />
           </div>
 
           <div className="space-y-4">
-            <label className="block text-xs uppercase tracking-widest text-white/40">衣櫃服裝 (多選)</label>
+            <label className="block text-xs uppercase tracking-widest text-white/40">
+              新增衣櫃服裝 (多選) {editCharacter && "- 將附加到現有衣櫃"}
+            </label>
             <input type="file" multiple accept="image/*" onChange={e => {
               const files = Array.from(e.target.files || []);
               setWardrobeFiles(files.map(f => ({ name: f.name.split(".")[0], file: f })));
@@ -508,7 +535,9 @@ function AdminPanel({ onClose }: { onClose: () => void }) {
           </div>
 
           <div className="space-y-4">
-            <label className="block text-xs uppercase tracking-widest text-white/40">作品集 (多選)</label>
+            <label className="block text-xs uppercase tracking-widest text-white/40">
+              新增作品集 (多選) {editCharacter && "- 將附加到現有作品集"}
+            </label>
             <input type="file" multiple accept="image/*" onChange={e => setPortfolioFiles(Array.from(e.target.files || []))} className="text-xs" />
           </div>
 
@@ -517,7 +546,7 @@ function AdminPanel({ onClose }: { onClose: () => void }) {
             disabled={uploading}
             className="w-full bg-white text-black py-4 rounded-sm font-bold uppercase tracking-[0.2em] hover:bg-white/90 disabled:opacity-50 flex items-center justify-center gap-2"
           >
-            {uploading ? <><div className="animate-spin rounded-full h-4 w-4 border-2 border-black border-t-transparent" /> {progress}</> : <><Upload className="w-4 h-4" /> 開始上傳</>}
+            {uploading ? <><div className="animate-spin rounded-full h-4 w-4 border-2 border-black border-t-transparent" /> {progress}</> : <><Upload className="w-4 h-4" /> {editCharacter ? "儲存修改" : "開始上傳"}</>}
           </button>
         </form>
       </div>
