@@ -445,7 +445,7 @@ function AdminPanel({ onClose }: { onClose: () => void }) {
       onClose();
     } catch (error) {
       console.error("Upload failed:", error);
-      alert("上傳失敗，請檢查網路或權限");
+      alert("上傳失敗：沒有權限。請確認您已在 Firebase Storage 設定了正確的安全性規則 (allow write: if request.auth != null;)。");
     } finally {
       setUploading(false);
     }
