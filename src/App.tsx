@@ -63,7 +63,7 @@ export default function App() {
     return () => window.removeEventListener("keydown", handleEsc);
   }, []);
 
-  const isAdmin = user && ADMIN_EMAILS.includes(user.email || "");
+  const isAdmin = user && ADMIN_EMAILS.map(e => e.toLowerCase()).includes((user.email || "").toLowerCase());
 
   const handleLogin = async () => {
     const provider = new GoogleAuthProvider();
