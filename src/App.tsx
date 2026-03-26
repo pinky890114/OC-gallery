@@ -470,7 +470,7 @@ function AdminPanel({ onClose }: { onClose: () => void }) {
             <input placeholder="日文/代號 (如: 零)" value={japaneseName} onChange={e => setJapaneseName(e.target.value)} className="bg-white/5 border border-white/10 p-3 rounded-sm text-sm" />
           </div>
           
-          <textarea required placeholder="角色描述" value={description} onChange={e => setDescription(e.target.value)} className="w-full bg-white/5 border border-white/10 p-3 rounded-sm text-sm h-24" />
+          <textarea placeholder="角色描述 (選填)" value={description} onChange={e => setDescription(e.target.value)} className="w-full bg-white/5 border border-white/10 p-3 rounded-sm text-sm h-24" />
           
           <div className="grid grid-cols-2 gap-4">
             <input placeholder="年齡" value={age} onChange={e => setAge(e.target.value)} className="bg-white/5 border border-white/10 p-3 rounded-sm text-sm" />
