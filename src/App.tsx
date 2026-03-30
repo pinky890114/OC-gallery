@@ -179,6 +179,7 @@ export default function App() {
 function CharacterDetail({ character, onClose, isAdmin, onEdit }: { character: Character; onClose: () => void; isAdmin: boolean | null; onEdit: () => void }) {
   const [activeTab, setActiveTab] = useState<"settings" | "wardrobe" | "portfolio">("settings");
   const [activeWardrobeIdx, setActiveWardrobeIdx] = useState(0);
+  const [selectedPortfolioItem, setSelectedPortfolioItem] = useState<PortfolioItem | null>(null);
 
   const handleDelete = async () => {
     if (!window.confirm("確定要刪除這個寶寶嗎？")) return;
@@ -363,7 +364,11 @@ function CharacterDetail({ character, onClose, isAdmin, onEdit }: { character: C
                     className="columns-1 sm:columns-2 gap-4 space-y-4"
                   >
                     {character.portfolio.map((item) => (
-                      <div key={item.id} className="break-inside-avoid group relative overflow-hidden rounded-sm bg-zinc-900">
+                      <div 
+                        key={item.id} 
+                        onClick={() => setSelectedPortfolioItem(item)}
+                        className="break-inside-avoid group relative overflow-hidden rounded-sm bg-zinc-900 cursor-zoom-in"
+                      >
                         <img
                           src={item.imageUrl}
                           alt={item.title}
@@ -383,6 +388,46 @@ function CharacterDetail({ character, onClose, isAdmin, onEdit }: { character: C
           </motion.div>
         </div>
       </div>
+
+      {/* Portfolio Lightbox */}
+      <AnimatePresence>
+        {selectedPortfolioItem && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setSelectedPortfolioItem(null)}
+            className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center p-4 sm:p-8 cursor-zoom-out"
+          >
+            <button
+              onClick={() => setSelectedPortfolioItem(null)}
+              className="absolute top-6 right-6 p-4 text-white/50 hover:text-white transition-colors z-10"
+            >
+              <X className="w-8 h-8" />
+            </button>
+            <motion.img
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              src={selectedPortfolioItem.imageUrl}
+              alt={selectedPortfolioItem.title}
+              className="max-w-full max-h-full object-contain rounded-sm shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+              referrerPolicy="no-referrer"
+            />
+            {selectedPortfolioItem.title && (
+              <motion.div 
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="absolute bottom-8 left-0 right-0 text-center text-white/60 tracking-widest uppercase text-sm drop-shadow-md pointer-events-none"
+              >
+                {selectedPortfolioItem.title}
+              </motion.div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }
